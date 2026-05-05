@@ -34,5 +34,6 @@ chapters:
       - file: debate/actors
       - file: debate/stages
       - file: debate/mandate-guide
+      - file: debate/glossary
   - file: project/index
   - file: resources
