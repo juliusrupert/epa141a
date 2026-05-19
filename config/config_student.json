@@ -7,11 +7,25 @@
     "n_rbfs": 4,
     "n_inputs": 2,
     "epsilons": [
-        0.1,
-        0.25,
+        10.0,
+        0.01,
         10.0,
         10.0
     ],
     "temperature_year_of_interest": 2100,
-    "reference_ssp_rcp_scenario_index": 2
+    "reference_ssp_rcp_scenario_index": 2,
+    "stochastic_run": false,
+    "climate_ensemble_members": [
+        85,
+        88,
+        94,
+        201,
+        431,
+        436,
+        650,
+        696,
+        768,
+        856
+    ],
+    "social_welfare_function_type": 1
 }
