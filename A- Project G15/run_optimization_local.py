@@ -456,8 +456,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--seeds",       type=int, nargs="+",
                    default=[9845531, 1644652, 3569126, 6075612, 521475],
                    help="Random seeds")
-    p.add_argument("--output_dir",  type=str,
-                   default=os.path.join(_SCRIPT_DIR, "results"),
+    p.add_argument("--output_dir", type=str,
+                   default=os.path.join(_SCRIPT_DIR, "../assignments_ema/results"),
                    help="Root output directory for results (default: assignments_ema/results/)")
     p.add_argument("--n_processes", type=int,        default=None,
                    help="Worker processes (None = cpu_count - 1)")

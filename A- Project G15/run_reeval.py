@@ -40,7 +40,7 @@ import pandas as pd
 _SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 _JUSTICE_ROOT = os.path.normpath(os.path.join(_SCRIPT_DIR, "../JUSTICE-main"))
 _CONFIG_DIR   = os.path.normpath(os.path.join(_SCRIPT_DIR, "../config"))
-RESULTS_ROOT  = os.path.join(_SCRIPT_DIR, "results")
+RESULTS_ROOT  = os.path.join(_SCRIPT_DIR, "../assignments_ema/results")
 
 if _JUSTICE_ROOT not in sys.path:
     sys.path.insert(0, _JUSTICE_ROOT)
