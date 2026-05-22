@@ -4,7 +4,7 @@ run_optimization_local.py  —  Assignment 5 Model Answer
 Local multi-objective optimisation for JUSTICE using GenerationalBorg
 (ema_workbench / Platypus).
 
-Optimises 244 RBF policy parameters under the **Utilitarian** social welfare
+Optimises 244 RBF policy parameters under the **Prioritarian * social welfare
 function, tracking 4 objectives:
   1. welfare                  [MINIMIZE]
   2. fraction_above_threshold [MINIMIZE]  fraction of ensemble members whose
@@ -351,7 +351,7 @@ def run_seed(
         Constant("n_inputs_rbf",                     n_inputs),
         Constant("n_outputs_rbf",                    n_regions),
         Constant("social_welfare_function_type",
-                 WelfareFunction.UTILITARIAN.value[0]),   # 0
+                 WelfareFunction.PRIORITARIAN.value[0]),   # 0
         Constant("economy_type",         Economy.NEOCLASSICAL.value),   # 0
         Constant("damage_function_type", DamageFunction.KALKUHL.value), # 1
         Constant("abatement_type",       Abatement.ENERDATA.value),     # 0
@@ -388,9 +388,9 @@ def run_seed(
     ]
 
     # -- output setup ------------------------------------------------------
-    seed_dir = os.path.join(output_dir, f"UTILITARIAN_{nfe}_{seed}")
+    seed_dir = os.path.join(output_dir, f"PRIORITARIAN_{nfe}_{seed}")
     os.makedirs(seed_dir, exist_ok=True)
-    archive_filename = f"UTILITARIAN_{nfe}_{seed}.tar.gz"
+    archive_filename = f"PRIORITARIAN_{nfe}_{seed}.tar.gz"
 
     # ema_workbench 3.0 raises FileExistsError if archive already exists.
     archive_path = os.path.join(seed_dir, archive_filename)
@@ -488,7 +488,7 @@ def main() -> None:
     print("=" * 65)
     print("JUSTICE — Local MOEA Optimisation  (Assignment 5)")
     print("=" * 65)
-    print(f"  Welfare function  : UTILITARIAN")
+    print(f"  Welfare function  : PRIORITARIAN")
     print(f"  Config            : {args.config}")
     print(f"  NFE per seed      : {args.nfe:,}")
     print(f"  Seeds ({len(args.seeds)})        : {args.seeds}")
