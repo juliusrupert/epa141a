@@ -40,7 +40,7 @@ import pandas as pd
 _SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 _JUSTICE_ROOT = os.path.normpath(os.path.join(_SCRIPT_DIR, "../JUSTICE-main"))
 _CONFIG_DIR   = os.path.normpath(os.path.join(_SCRIPT_DIR, "../config"))
-RESULTS_ROOT  = os.path.join(_SCRIPT_DIR, "../assignments_ema/results")
+RESULTS_ROOT  = _SCRIPT_DIR
 
 if _JUSTICE_ROOT not in sys.path:
     sys.path.insert(0, _JUSTICE_ROOT)
@@ -58,7 +58,7 @@ from justice.objectives.objective_functions import years_above_temperature_thres
 from solvers.emodps.rbf import RBF
 
 # ── Config ────────────────────────────────────────────────────────────────────
-with open(os.path.join(_CONFIG_DIR, "config_ssp245.json")) as _fh:
+with open(os.path.join(_CONFIG_DIR, "config_student.json")) as _fh:
     _cfg = json.load(_fh)
 
 _time_horizon = TimeHorizon(
@@ -101,6 +101,7 @@ def model_wrapper_reeval(**kwargs) -> tuple:
     weights = np.array([kwargs.pop(f"weights {i}") for i in range(W_SHAPE[0])])
     rbf.set_decision_vars(np.concatenate([centers, radii, weights]))
 
+
     constraint = EmissionControlConstraint(
         max_annual_growth_rate          = 0.04,
         emission_control_start_timestep = EC_START_TS,
@@ -113,7 +114,7 @@ def model_wrapper_reeval(**kwargs) -> tuple:
         economy_type                = Economy.NEOCLASSICAL,
         damage_function_type        = DamageFunction.KALKUHL,
         abatement_type              = Abatement.ENERDATA,
-        social_welfare_function_type= WelfareFunction.UTILITARIAN.value[0],
+        social_welfare_function_type= WelfareFunction.PRIORITARIAN.value[0],
     )
     no_ens          = model.no_of_ensembles   # 1
     ecr             = np.zeros((N_REGIONS, N_TIMESTEPS, no_ens))
@@ -178,9 +179,9 @@ if __name__ == "__main__":
     SCENARIO_INDICES = list(np.linspace(1, 1000, N_SCENARIOS, dtype=int))
 
     # ── Load reference set ─────────────────────────────────────────────────────
-    ref_path = os.path.join(RESULTS_ROOT, "reference_set_utilitarian.csv")
+    ref_path = os.path.join(RESULTS_ROOT, "reference_set_prioritarian_100000.csv")
     if not os.path.exists(ref_path):
-        ref_path = os.path.join(RESULTS_ROOT, "UTILITARIAN_reference_set.csv")
+        ref_path = os.path.join(RESULTS_ROOT, "reference_set_prioritarian_100000.csv")
         print(f"Grand reference set not found — falling back to {ref_path}")
 
     ref_set  = pd.read_csv(ref_path)
@@ -192,11 +193,15 @@ if __name__ == "__main__":
     N_POLICIES   = len(ref_set)
     N_OBJECTIVES = len(OBJECTIVES)
 
-    RESULTS_PATH     = os.path.join(RESULTS_ROOT,
-                                    f"reeval_utilitarian_{N_POLICIES}p_{N_SCENARIOS}s.npy")
-    EXPERIMENTS_PATH = os.path.join(RESULTS_ROOT,
-                                    f"reeval_utilitarian_{N_POLICIES}p_{N_SCENARIOS}s_experiments.csv")
+    RESULTS_PATH = os.path.join(
+        RESULTS_ROOT,
+        f"reeval_prioritarian_{N_POLICIES}p_{N_SCENARIOS}s.npy"
+    )
 
+    EXPERIMENTS_PATH = os.path.join(
+        RESULTS_ROOT,
+        f"reeval_prioritarian_{N_POLICIES}p_{N_SCENARIOS}s_experiments.csv"
+    )
     print(f"Policies  : {N_POLICIES}")
     print(f"Scenarios : {N_SCENARIOS}  (FAIR indices: {SCENARIO_INDICES[:3]} … {SCENARIO_INDICES[-3:]})")
     print(f"Cache     : {RESULTS_PATH}")
