@@ -58,7 +58,7 @@ from justice.objectives.objective_functions import years_above_temperature_thres
 from solvers.emodps.rbf import RBF
 
 # ── Config ────────────────────────────────────────────────────────────────────
-with open(os.path.join(_CONFIG_DIR, "config_student.json")) as _fh:
+with open(os.path.join(_CONFIG_DIR, "config_ssp245.json")) as _fh:
     _cfg = json.load(_fh)
 
 _time_horizon = TimeHorizon(
@@ -96,11 +96,10 @@ def model_wrapper_reeval(**kwargs) -> tuple:
     ensemble_index = int(kwargs.pop("climate_ensemble_index"))
 
     rbf     = RBF(n_rbfs=N_RBFS, n_inputs=N_INPUTS, n_outputs=N_REGIONS)
-    centers = np.array([kwargs.pop(f"center {i}") for i in range(C_SHAPE[0])])
-    radii   = np.array([kwargs.pop(f"radii {i}")  for i in range(R_SHAPE[0])])
-    weights = np.array([kwargs.pop(f"weights {i}") for i in range(W_SHAPE[0])])
+    centers = np.array([kwargs.pop(f"center_{i}") for i in range(C_SHAPE[0])])
+    radii   = np.array([kwargs.pop(f"radii_{i}")  for i in range(R_SHAPE[0])])
+    weights = np.array([kwargs.pop(f"weights_{i}") for i in range(W_SHAPE[0])])
     rbf.set_decision_vars(np.concatenate([centers, radii, weights]))
-
 
     constraint = EmissionControlConstraint(
         max_annual_growth_rate          = 0.04,
@@ -114,7 +113,7 @@ def model_wrapper_reeval(**kwargs) -> tuple:
         economy_type                = Economy.NEOCLASSICAL,
         damage_function_type        = DamageFunction.KALKUHL,
         abatement_type              = Abatement.ENERDATA,
-        social_welfare_function_type= WelfareFunction.PRIORITARIAN.value[0],
+        social_welfare_function_type= WelfareFunction.UTILITARIAN.value[0],
     )
     no_ens          = model.no_of_ensembles   # 1
     ecr             = np.zeros((N_REGIONS, N_TIMESTEPS, no_ens))
@@ -175,20 +174,17 @@ if __name__ == "__main__":
                         help="Number of CPU cores (default: all available)")
     args = parser.parse_args()
 
-    N_SCENARIOS = args.n_scenarios
-
-    if N_SCENARIOS < 2:
-        raise ValueError("Use at least 2 scenarios. For a smoke test, use --n_scenarios 5.")
-
+    N_SCENARIOS      = args.n_scenarios
     SCENARIO_INDICES = list(np.linspace(1, 1000, N_SCENARIOS, dtype=int))
 
     # ── Load reference set ─────────────────────────────────────────────────────
-    ref_path = os.path.join(RESULTS_ROOT, "reference_set_prioritarian_100000.csv")
+    ref_path = os.path.join(RESULTS_ROOT, "reference_set_utilitarian.csv")
     if not os.path.exists(ref_path):
-        ref_path = os.path.join(RESULTS_ROOT, "reference_set_prioritarian_100000.csv")
+        ref_path = os.path.join(RESULTS_ROOT, "UTILITARIAN_reference_set.csv")
         print(f"Grand reference set not found — falling back to {ref_path}")
 
     ref_set  = pd.read_csv(ref_path)
+    ref_set.columns = [c.replace(" ", "_") for c in ref_set.columns]
     ref_set  = ref_set[ref_set["welfare"] < 1e5].reset_index(drop=True)
     OPT_OBJECTIVES = ["welfare", "fraction_above_threshold",
                       "welfare_loss_damage", "welfare_loss_abatement"]
@@ -197,15 +193,11 @@ if __name__ == "__main__":
     N_POLICIES   = len(ref_set)
     N_OBJECTIVES = len(OBJECTIVES)
 
-    RESULTS_PATH = os.path.join(
-        RESULTS_ROOT,
-        f"reeval_prioritarian_{N_POLICIES}p_{N_SCENARIOS}s.npy"
-    )
+    RESULTS_PATH     = os.path.join(RESULTS_ROOT,
+                                    f"reeval_utilitarian_{N_POLICIES}p_{N_SCENARIOS}s.npy")
+    EXPERIMENTS_PATH = os.path.join(RESULTS_ROOT,
+                                    f"reeval_utilitarian_{N_POLICIES}p_{N_SCENARIOS}s_experiments.csv")
 
-    EXPERIMENTS_PATH = os.path.join(
-        RESULTS_ROOT,
-        f"reeval_prioritarian_{N_POLICIES}p_{N_SCENARIOS}s_experiments.csv"
-    )
     print(f"Policies  : {N_POLICIES}")
     print(f"Scenarios : {N_SCENARIOS}  (FAIR indices: {SCENARIO_INDICES[:3]} … {SCENARIO_INDICES[-3:]})")
     print(f"Cache     : {RESULTS_PATH}")
@@ -216,12 +208,10 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # ── Build EMA objects ──────────────────────────────────────────────────────
-
     from ema_workbench import (
         Model, RealParameter, IntegerParameter, ScalarOutcome,
-        MultiprocessingEvaluator, ema_logging, Sample
+        Sample, MultiprocessingEvaluator, ema_logging,
     )
-
     ema_logging.log_to_stderr(ema_logging.INFO)
 
     ema_model = Model("JUSTICEreeval", function=model_wrapper_reeval)
@@ -230,9 +220,9 @@ if __name__ == "__main__":
     n_cr = C_SHAPE[0]
     n_w  = W_SHAPE[0]
     ema_model.levers = (
-        [RealParameter(f"center {i}", -1.0, 1.0) for i in range(n_cr)]
-        + [RealParameter(f"radii {i}",  0.0, 1.0) for i in range(n_cr)]
-        + [RealParameter(f"weights {i}", 0.0, 1.0) for i in range(n_w)]
+        [RealParameter(f"center_{i}", -1.0, 1.0) for i in range(n_cr)]
+        + [RealParameter(f"radii_{i}",  0.0, 1.0) for i in range(n_cr)]
+        + [RealParameter(f"weights_{i}", 0.0, 1.0) for i in range(n_w)]
     )
     ema_model.outcomes = [
         ScalarOutcome("welfare",                kind=ScalarOutcome.MINIMIZE),
