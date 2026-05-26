@@ -40,7 +40,7 @@ import pandas as pd
 _SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 _JUSTICE_ROOT = os.path.normpath(os.path.join(_SCRIPT_DIR, "../JUSTICE-main"))
 _CONFIG_DIR   = os.path.normpath(os.path.join(_SCRIPT_DIR, "../config"))
-RESULTS_ROOT  = _SCRIPT_DIR
+RESULTS_ROOT  = os.path.join(_SCRIPT_DIR, "results")
 
 if _JUSTICE_ROOT not in sys.path:
     sys.path.insert(0, _JUSTICE_ROOT)
@@ -175,7 +175,11 @@ if __name__ == "__main__":
                         help="Number of CPU cores (default: all available)")
     args = parser.parse_args()
 
-    N_SCENARIOS      = args.n_scenarios
+    N_SCENARIOS = args.n_scenarios
+
+    if N_SCENARIOS < 2:
+        raise ValueError("Use at least 2 scenarios. For a smoke test, use --n_scenarios 5.")
+
     SCENARIO_INDICES = list(np.linspace(1, 1000, N_SCENARIOS, dtype=int))
 
     # ── Load reference set ─────────────────────────────────────────────────────
@@ -212,10 +216,12 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # ── Build EMA objects ──────────────────────────────────────────────────────
+
     from ema_workbench import (
         Model, RealParameter, IntegerParameter, ScalarOutcome,
-        Policy, Scenario, MultiprocessingEvaluator, ema_logging,
+        MultiprocessingEvaluator, ema_logging, Sample
     )
+
     ema_logging.log_to_stderr(ema_logging.INFO)
 
     ema_model = Model("JUSTICEreeval", function=model_wrapper_reeval)
@@ -236,11 +242,11 @@ if __name__ == "__main__":
     ]
 
     policies  = [
-        Policy(f"P{pi}", **{col: float(ref_set.iloc[pi][col]) for col in LEVER_COLS})
+        Sample(f"P{pi}", **{col: float(ref_set.iloc[pi][col]) for col in LEVER_COLS})
         for pi in range(N_POLICIES)
     ]
     scenarios = [
-        Scenario(f"FAIR_{idx}", climate_ensemble_index=int(idx))
+        Sample(f"FAIR_{idx}", climate_ensemble_index=int(idx))
         for idx in SCENARIO_INDICES
     ]
 
