@@ -59,7 +59,8 @@ import warnings
 
 import numpy as np
 
-warnings.filterwarnings("ignore")
+#Weghalen om te checken voor warnings
+#warnings.filterwarnings("ignore")
 
 # ---------------------------------------------------------------------------
 # Path setup — all paths are derived from the repo root so that JUSTICE-main
@@ -127,11 +128,18 @@ from solvers.emodps.rbf import RBF  # noqa: E402
 # ---------------------------------------------------------------------------
 # Scaling constants — identical to EMA_model_wrapper.py
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Numerical constants
+# ---------------------------------------------------------------------------
+SMALL_NUMBER = 1e-9
+
+# ---------------------------------------------------------------------------
+# Scaling constants — identical to EMA_model_wrapper.py
+# ---------------------------------------------------------------------------
 _MAX_TEMP = 16.0
 _MIN_TEMP = 0.0
 _MAX_DIFF = 2.0
 _MIN_DIFF = 0.0
-
 
 # ===========================================================================
 # Model wrapper
@@ -206,59 +214,32 @@ def model_wrapper_local(**kwargs) -> tuple[float, float, float, float]:
     no_of_ensembles = model.no_of_ensembles
 
     # -- stepwise simulation -----------------------------------------------
-    ecr             = np.zeros((n_regions, n_timesteps, no_of_ensembles))
-    constrained_ecr = np.zeros_like(ecr)
-    prev_temp       = 0.0
-    diff            = 0.0
-
-    for t in range(n_timesteps):
-        constrained_ecr[:, t, :] = constraint.constrain_emission_control_rate(
-            ecr[:, t, :], t, allow_fallback=False
-        )
-        model.stepwise_run(
-            emission_control_rate=constrained_ecr[:, t, :],
-            timestep=t,
-            endogenous_savings_rate=True,
-        )
-        data = model.stepwise_evaluate(timestep=t)
-        temp = data["global_temperature"][t, :]
-
-        if t % 5 == 0:
-            diff      = temp - prev_temp
-            prev_temp = temp
-
-        scaled_temp = (temp - _MIN_TEMP) / (_MAX_TEMP - _MIN_TEMP)
-        scaled_diff = (diff - _MIN_DIFF) / (_MAX_DIFF - _MIN_DIFF)
-
-        if t < n_timesteps - 1:
-            ecr[:, t + 1, :] = rbf.apply_rbfs(np.array([scaled_temp, scaled_diff]))
-
-    # -- final objectives ---------------------------------------------------
     data = model.evaluate()
 
-    welfare = float(np.abs(data["welfare"]))
-    welfare = welfare if np.isfinite(welfare) else 1e6  # penalty for NaN/Inf
+    gt = data["global_temperature"]
 
-    frac = fraction_of_ensemble_above_threshold(
-        temperature=data["global_temperature"],
-        temperature_year_index=temp_year_idx,
-        threshold=2.0,
+    welfare = float(np.abs(data["welfare"]))
+    welfare = welfare if np.isfinite(welfare) else 1e6
+
+    yrs_above = float(
+        years_above_temperature_threshold(gt, threshold=2.0)
     )
-    frac = float(frac) if np.isfinite(float(frac)) else 1.0  # worst-case fraction
+    yrs_above = yrs_above if np.isfinite(yrs_above) else 1e6
+
+    damage_pc = np.maximum(data["damage_cost_per_capita"], SMALL_NUMBER)
+    abatement_pc = np.maximum(data["abatement_cost_per_capita"], SMALL_NUMBER)
 
     _, _, _, wl_damage = model.welfare_function.calculate_welfare(
-        data["damage_cost_per_capita"], welfare_loss=True
+        damage_pc, welfare_loss=True
     )
-    wl_damage = float(np.abs(wl_damage))
-    wl_damage = wl_damage if np.isfinite(wl_damage) else 0.0  # worst-case for MAXIMIZE
+    wl_damage = float(np.abs(wl_damage)) if np.isfinite(wl_damage) else 1e6
 
     _, _, _, wl_abatement = model.welfare_function.calculate_welfare(
-        data["abatement_cost_per_capita"], welfare_loss=True
+        abatement_pc, welfare_loss=True
     )
-    wl_abatement = float(np.abs(wl_abatement))
-    wl_abatement = wl_abatement if np.isfinite(wl_abatement) else 0.0  # worst-case for MAXIMIZE
+    wl_abatement = float(np.abs(wl_abatement)) if np.isfinite(wl_abatement) else 1e6
 
-    return (welfare, frac, wl_damage, wl_abatement)
+    return (welfare, yrs_above, wl_damage, wl_abatement)
 
 
 # ===========================================================================
@@ -374,9 +355,9 @@ def run_seed(
     n_w  = n_rbfs_actual * n_regions  # weights = 228
 
     ema_model.levers = (
-        [RealParameter(f"center {i}",  -1.0, 1.0) for i in range(n_cr)]
-        + [RealParameter(f"radii {i}",   0.0, 1.0) for i in range(n_cr)]
-        + [RealParameter(f"weights {i}", 0.0, 1.0) for i in range(n_w)]
+            [RealParameter(f"center {i}", -1.0, 1.0) for i in range(n_cr)]
+            + [RealParameter(f"radii {i}", SMALL_NUMBER, 1.0) for i in range(n_cr)]
+            + [RealParameter(f"weights {i}", SMALL_NUMBER, 1.0) for i in range(n_w)]
     )
 
     #  Outcomes: positional order matches model_wrapper_local return tuple
