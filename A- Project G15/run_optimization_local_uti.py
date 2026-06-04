@@ -445,8 +445,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--n_ensembles", type=int,        default=10,
                    help="FAIR ensemble members to use")
     p.add_argument("--config",      type=str,
-                   default=os.path.join(_CONFIG_DIR, "config_student.json"),
-                   help="Config file path (default: config/config_student.json at repo root)")
+                   default=os.path.join(_CONFIG_DIR, "config_student_uti.json"),
+                   help="Config file path (default: config/config_student_uti.json at repo root)")
     p.add_argument("--population",  type=int,        default=100,
                    help="MOEA population size")
     return p
