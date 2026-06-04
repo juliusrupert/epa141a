@@ -73,7 +73,7 @@ from justice.objectives.objective_functions import years_above_temperature_thres
 from solvers.emodps.rbf import RBF
 
 # ── Config ──────────────────────────────────────────────────────────────────
-with open(os.path.join(_CONFIG_DIR, "config_student.json")) as _fh:
+with open(os.path.join(_CONFIG_DIR, "config_student_uti.json")) as _fh:
     _cfg = json.load(_fh)
 
 _time_horizon = TimeHorizon(
