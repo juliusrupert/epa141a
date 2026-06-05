@@ -58,6 +58,9 @@ from justice.util.enumerations import (
 from justice.util.emission_control_constraint import EmissionControlConstraint
 from justice.util.model_time import TimeHorizon
 from justice.objectives.objective_functions import years_above_temperature_threshold
+from justice.objectives.objective_functions import (  # noqa: E402
+    fraction_of_ensemble_above_threshold,
+)
 from solvers.emodps.rbf import RBF
 
 # ── Config ──────────────────────────────────────────────────────────────────
@@ -82,6 +85,10 @@ EC_START_TS = _time_horizon.year_to_timestep(
     timestep = _cfg["timestep"],
 )
 
+TEMP_YEAR_IDX = _time_horizon.year_to_timestep(
+    year     = _cfg["temperature_year_of_interest"],
+    timestep = _cfg["timestep"],
+)
 _rbf_tmp = RBF(n_rbfs=N_RBFS, n_inputs=N_INPUTS, n_outputs=N_REGIONS)
 C_SHAPE, R_SHAPE, W_SHAPE = _rbf_tmp.get_shape()
 
@@ -93,14 +100,11 @@ _MAX_DIFF, _MIN_DIFF = 2.0, 0.0
 # They are the scalar values returned by model_wrapper_reeval.
 OBJECTIVES = [
     "welfare",
-    "years_above_2C",
+    "fraction_above_threshold",
     "welfare_loss_damage",
     "welfare_loss_abatement",
-    "fraction_above_threshold",
-    "zaf_mean_abatement_burden",
-    "zaf_mean_damage_fraction",
+    "abatement_burden",
 ]
-
 
 # ── Model wrapper ────────────────────────────────────────────────────────────
 def model_wrapper_reeval(**kwargs) -> tuple:
@@ -188,22 +192,12 @@ def model_wrapper_reeval(**kwargs) -> tuple:
         data = model.evaluate()
 
         # ── Climate effectiveness metric ──────────────────────────────────────
-        gt = data["global_temperature"]
-        gt_safe = np.nan_to_num(
-            gt,
-            nan=99.0,
-            posinf=99.0,
-            neginf=_MIN_TEMP,
+        frac = fraction_of_ensemble_above_threshold(
+            temperature=data["global_temperature"],
+            temperature_year_index=temp_year_idx,
+            threshold=2.0,
         )
-
-        fraction_above_threshold = float(
-            np.mean(np.max(gt_safe, axis=0) > 2.0)
-        )
-        fraction_above_threshold = (
-            fraction_above_threshold
-            if np.isfinite(fraction_above_threshold)
-            else 1e6
-        )
+        frac = float(frac) if np.isfinite(float(frac)) else 1.0
 
         yrs_above = float(
             years_above_temperature_threshold(gt_safe, threshold=2.0)
@@ -228,46 +222,27 @@ def model_wrapper_reeval(**kwargs) -> tuple:
             welfare_loss=True,
         )
         wl_abatement = float(np.abs(wl_abatement)) if np.isfinite(wl_abatement) else 1e6
+        # ── Global abatement burden ───────────────────────────────────────────────
+        # Abatement burden = abatement cost as share of gross economic output,
+        # averaged over all regions, timesteps, and ensemble members.
+        gross_output = data["gross_economic_output"]
+        abatement_cost = data["abatement_cost"]
 
-        # ── South Africa-specific post-processed metrics ──────────────────────
-        # These are derived scalar metrics. They are not direct JUSTICE keys.
-        region_list = list(model.data_loader.REGION_LIST)
-        zaf_idx = region_list.index("zaf")
-
-        gross = data["gross_economic_output"]
-        abatement = data["abatement_cost"]
-        damage_fraction = data["damage_fraction"]
-
-        # South Africa arrays: time × ensemble
-        zaf_gross = gross[zaf_idx, :, :]
-        zaf_abatement = abatement[zaf_idx, :, :]
-        zaf_damage_fraction_arr = damage_fraction[zaf_idx, :, :]
-
-        # Abatement burden = abatement_cost / gross_economic_output
-        zaf_abatement_burden_arr = np.divide(
-            zaf_abatement,
-            zaf_gross,
-            out=np.full_like(zaf_abatement, np.nan, dtype=float),
-            where=zaf_gross != 0,
+        abatement_burden_arr = np.divide(
+            abatement_cost,
+            np.maximum(gross_output, SMALL_NUMBER),
         )
 
-        zaf_mean_abatement_burden = float(np.nanmean(zaf_abatement_burden_arr))
-        zaf_mean_damage_fraction = float(np.nanmean(zaf_damage_fraction_arr))
+        A_Burden = float(np.nanmean(abatement_burden_arr))
+        A_Burden = A_Burden if np.isfinite(A_Burden) else 1e6
 
-        if not np.isfinite(zaf_mean_abatement_burden):
-            zaf_mean_abatement_burden = 1e6
-
-        if not np.isfinite(zaf_mean_damage_fraction):
-            zaf_mean_damage_fraction = 1e6
 
         return (
             welfare,
-            yrs_above,
+            frac,
             wl_damage,
             wl_abatement,
-            fraction_above_threshold,
-            zaf_mean_abatement_burden,
-            zaf_mean_damage_fraction,
+            A_Burden,
         )
 
     except Exception as e:
@@ -327,6 +302,7 @@ if __name__ == "__main__":
         "fraction_above_threshold",
         "welfare_loss_damage",
         "welfare_loss_abatement",
+        "abatement_burden"
     ]
 
     LEVER_COLS = [c for c in ref_set.columns if c not in OPT_OBJECTIVES]
@@ -386,12 +362,10 @@ if __name__ == "__main__":
     # Names must match OBJECTIVES and the return tuple from model_wrapper_reeval.
     ema_model.outcomes = [
         ScalarOutcome("welfare", kind=ScalarOutcome.MINIMIZE),
-        ScalarOutcome("years_above_2C", kind=ScalarOutcome.MINIMIZE),
-        ScalarOutcome("welfare_loss_damage", kind=ScalarOutcome.MINIMIZE),
-        ScalarOutcome("welfare_loss_abatement", kind=ScalarOutcome.MINIMIZE),
         ScalarOutcome("fraction_above_threshold", kind=ScalarOutcome.MINIMIZE),
-        ScalarOutcome("zaf_mean_abatement_burden", kind=ScalarOutcome.MINIMIZE),
-        ScalarOutcome("zaf_mean_damage_fraction", kind=ScalarOutcome.MINIMIZE),
+        ScalarOutcome("welfare_loss_damage", kind=ScalarOutcome.MAXIMIZE),
+        ScalarOutcome("welfare_loss_abatement", kind=ScalarOutcome.MAXIMIZE),
+        ScalarOutcome("abatement_burden", kind=ScalarOutcome.MINIMIZE),
     ]
 
     policies = [

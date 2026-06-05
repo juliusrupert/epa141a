@@ -2,25 +2,17 @@
 run_reeval.py — Parallel robustness re-evaluation for Assignment 8
 ==================================================================
 Runs the full policy × scenario experiment using EMA Workbench's
-MultiprocessingEvaluator, which is not available inside a Jupyter notebook
-(the 'spawn' start method cannot pickle interactively-defined functions).
+MultiprocessingEvaluator.
 
-Results are saved in the same cache format as the notebook so they are
-loaded automatically when you open Assignment 8.
+This version saves scalar re-evaluation outcomes, including two
+South Africa-specific post-processed metrics:
+- zaf_mean_abatement_burden = mean(abatement_cost / gross_economic_output) for zaf
+- zaf_mean_damage_fraction  = mean(damage_fraction) for zaf
 
 Usage
 -----
-  # From the repo root, where JUSTICE-main/ lives:
-  cd /path/to/epa141a
-
-  # Default: all policies × 1000 FAIR scenarios, all CPU cores
-  python model_answers_ema/run_reeval.py
-
-  # Custom number of scenarios and cores
-  python model_answers_ema/run_reeval.py --n_scenarios 200 --n_cores 4
-
-  # Quick smoke-test
-  python model_answers_ema/run_reeval.py --n_scenarios 5 --n_cores 1
+  python run_reeval.py --n_scenarios 5 --n_cores 1
+  python run_reeval.py --n_scenarios 1000
 """
 
 import argparse
@@ -33,22 +25,18 @@ import numpy as np
 import pandas as pd
 
 # ── Warnings ─────────────────────────────────────────────────────────────────
-# FaIR can repeatedly produce this warning for some ensemble/policy combinations.
-# We suppress the repeated printout, but still guard against invalid outputs below.
 warnings.filterwarnings(
     "ignore",
     message="invalid value encountered in log",
     category=RuntimeWarning,
 )
-
-# Optional: suppress other noisy runtime warnings during large multiprocessing runs
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 _SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 _JUSTICE_ROOT = os.path.normpath(os.path.join(_SCRIPT_DIR, "../JUSTICE-main"))
 _CONFIG_DIR   = os.path.normpath(os.path.join(_SCRIPT_DIR, "../config"))
-RESULTS_ROOT  = os.path.join(_SCRIPT_DIR, "results")
+RESULTS_ROOT  = os.path.join(_SCRIPT_DIR, "results_rival")
 
 SMALL_NUMBER = 1e-9
 
@@ -70,10 +58,13 @@ from justice.util.enumerations import (
 from justice.util.emission_control_constraint import EmissionControlConstraint
 from justice.util.model_time import TimeHorizon
 from justice.objectives.objective_functions import years_above_temperature_threshold
+from justice.objectives.objective_functions import (  # noqa: E402
+    fraction_of_ensemble_above_threshold,
+)
 from solvers.emodps.rbf import RBF
 
 # ── Config ──────────────────────────────────────────────────────────────────
-with open(os.path.join(_CONFIG_DIR, "config_student_uti.json")) as _fh:
+with open(os.path.join(_CONFIG_DIR, "config_student.json")) as _fh:
     _cfg = json.load(_fh)
 
 _time_horizon = TimeHorizon(
@@ -94,19 +85,26 @@ EC_START_TS = _time_horizon.year_to_timestep(
     timestep = _cfg["timestep"],
 )
 
+TEMP_YEAR_IDX = _time_horizon.year_to_timestep(
+    year     = _cfg["temperature_year_of_interest"],
+    timestep = _cfg["timestep"],
+)
 _rbf_tmp = RBF(n_rbfs=N_RBFS, n_inputs=N_INPUTS, n_outputs=N_REGIONS)
 C_SHAPE, R_SHAPE, W_SHAPE = _rbf_tmp.get_shape()
 
 _MAX_TEMP, _MIN_TEMP = 16.0, 0.0
 _MAX_DIFF, _MIN_DIFF = 2.0, 0.0
 
+# IMPORTANT:
+# These names are NOT required to be direct JUSTICE model output keys.
+# They are the scalar values returned by model_wrapper_reeval.
 OBJECTIVES = [
     "welfare",
-    "years_above_2C",
+    "fraction_above_threshold",
     "welfare_loss_damage",
     "welfare_loss_abatement",
+    "abatement_burden",
 ]
-
 
 # ── Model wrapper ────────────────────────────────────────────────────────────
 def model_wrapper_reeval(**kwargs) -> tuple:
@@ -193,21 +191,22 @@ def model_wrapper_reeval(**kwargs) -> tuple:
 
         data = model.evaluate()
 
-        gt = data["global_temperature"]
-        gt_safe = np.nan_to_num(
-            gt,
-            nan=99.0,
-            posinf=99.0,
-            neginf=_MIN_TEMP,
+        # ── Climate effectiveness metric ──────────────────────────────────────
+        frac = fraction_of_ensemble_above_threshold(
+            temperature=data["global_temperature"],
+            temperature_year_index=temp_year_idx,
+            threshold=2.0,
         )
-
-        welfare = float(np.abs(data["welfare"]))
-        welfare = welfare if np.isfinite(welfare) else 1e6
+        frac = float(frac) if np.isfinite(float(frac)) else 1.0
 
         yrs_above = float(
             years_above_temperature_threshold(gt_safe, threshold=2.0)
         )
         yrs_above = yrs_above if np.isfinite(yrs_above) else 1e6
+
+        # ── Welfare and welfare-loss metrics ──────────────────────────────────
+        welfare = float(np.abs(data["welfare"]))
+        welfare = welfare if np.isfinite(welfare) else 1e6
 
         damage_pc = np.maximum(data["damage_cost_per_capita"], SMALL_NUMBER)
         abatement_pc = np.maximum(data["abatement_cost_per_capita"], SMALL_NUMBER)
@@ -223,12 +222,32 @@ def model_wrapper_reeval(**kwargs) -> tuple:
             welfare_loss=True,
         )
         wl_abatement = float(np.abs(wl_abatement)) if np.isfinite(wl_abatement) else 1e6
+        # ── Global abatement burden ───────────────────────────────────────────────
+        # Abatement burden = abatement cost as share of gross economic output,
+        # averaged over all regions, timesteps, and ensemble members.
+        gross_output = data["gross_economic_output"]
+        abatement_cost = data["abatement_cost"]
 
-        return (welfare, yrs_above, wl_damage, wl_abatement)
+        abatement_burden_arr = np.divide(
+            abatement_cost,
+            np.maximum(gross_output, SMALL_NUMBER),
+        )
+
+        A_Burden = float(np.nanmean(abatement_burden_arr))
+        A_Burden = A_Burden if np.isfinite(A_Burden) else 1e6
+
+
+        return (
+            welfare,
+            frac,
+            wl_damage,
+            wl_abatement,
+            A_Burden,
+        )
 
     except Exception as e:
         print(f"[FAILED RUN] {type(e).__name__}: {e}")
-        return (1e6, 1e6, 1e6, 1e6)
+        return (1e6, 1e6, 1e6, 1e6, 1e6, 1e6, 1e6)
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -239,7 +258,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n_scenarios",
         type=int,
-        default=1000,
+        default=200,
         help="Number of FAIR ensemble members to use. Default: 1000 = full ensemble.",
     )
     parser.add_argument(
@@ -276,11 +295,14 @@ if __name__ == "__main__":
     if weights_cols:
         ref_set[weights_cols] = ref_set[weights_cols].clip(lower=SMALL_NUMBER)
 
+    # These are columns that already exist in the optimization reference set.
+    # We remove them so LEVER_COLS only contains RBF decision variables.
     OPT_OBJECTIVES = [
         "welfare",
         "fraction_above_threshold",
         "welfare_loss_damage",
         "welfare_loss_abatement",
+        "abatement_burden"
     ]
 
     LEVER_COLS = [c for c in ref_set.columns if c not in OPT_OBJECTIVES]
@@ -290,11 +312,11 @@ if __name__ == "__main__":
 
     RESULTS_PATH = os.path.join(
         RESULTS_ROOT,
-        f"reeval_utilitarian_{N_POLICIES}p_{N_SCENARIOS}s.npy",
+        f"reeval_utilitarian_zafmetrics_{N_POLICIES}p_{N_SCENARIOS}s.npy",
     )
     EXPERIMENTS_PATH = os.path.join(
         RESULTS_ROOT,
-        f"reeval_utilitarian_{N_POLICIES}p_{N_SCENARIOS}s_experiments.csv",
+        f"reeval_utilitarian_zafmetrics_{N_POLICIES}p_{N_SCENARIOS}s_experiments.csv",
     )
 
     print(f"Policies  : {N_POLICIES}")
@@ -337,11 +359,13 @@ if __name__ == "__main__":
         + [RealParameter(f"weights_{i}", SMALL_NUMBER, 1.0) for i in range(n_w)]
     )
 
+    # Names must match OBJECTIVES and the return tuple from model_wrapper_reeval.
     ema_model.outcomes = [
-        ScalarOutcome("welfare",                kind=ScalarOutcome.MINIMIZE),
-        ScalarOutcome("years_above_2C",         kind=ScalarOutcome.MINIMIZE),
-        ScalarOutcome("welfare_loss_damage",    kind=ScalarOutcome.MINIMIZE),
-        ScalarOutcome("welfare_loss_abatement", kind=ScalarOutcome.MINIMIZE),
+        ScalarOutcome("welfare", kind=ScalarOutcome.MINIMIZE),
+        ScalarOutcome("fraction_above_threshold", kind=ScalarOutcome.MINIMIZE),
+        ScalarOutcome("welfare_loss_damage", kind=ScalarOutcome.MAXIMIZE),
+        ScalarOutcome("welfare_loss_abatement", kind=ScalarOutcome.MAXIMIZE),
+        ScalarOutcome("abatement_burden", kind=ScalarOutcome.MINIMIZE),
     ]
 
     policies = [
@@ -410,4 +434,4 @@ if __name__ == "__main__":
     print(f"NaN entries: {np.isnan(results).sum()}")
     print(f"Saved to: {RESULTS_PATH}")
     print(f"          {EXPERIMENTS_PATH}")
-    print("\nOpen Assignment 8 — it will load these results automatically.")
+    print("\nOpen Assignment 8 / your notebook and load the zafmetrics results.")

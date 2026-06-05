@@ -11,6 +11,7 @@ function, tracking 4 objectives:
                                           temperature exceeds 2 °C in 2100
   3. welfare_loss_damage      [MAXIMIZE]
   4. welfare_loss_abatement   [MAXIMIZE]
+ 5. abatement_burden         [MINIMIZE]
 
 Local-run adaptations (vs the HPC runner in analysis/hpc_runner_student.py):
   - Uses 10 well-distributed FAIR ensemble members instead of all 1000.
@@ -145,7 +146,7 @@ _MIN_DIFF = 0.0
 # Model wrapper
 # ===========================================================================
 
-def model_wrapper_local(**kwargs) -> tuple[float, float, float, float]:
+def model_wrapper_local(**kwargs) -> tuple[float, float, float, float, float]:
     """
     JUSTICE evaluation function for ema_workbench optimisation.
 
@@ -157,7 +158,7 @@ def model_wrapper_local(**kwargs) -> tuple[float, float, float, float]:
 
     Return order must match ``ema_model.outcomes`` defined in ``run_seed()``:
         (welfare, fraction_above_threshold,
-         welfare_loss_damage, welfare_loss_abatement)
+         welfare_loss_damage, welfare_loss_abatement, A_burden)
     """
     # -- constants ----------------------------------------------------------
     scenario = kwargs.pop("ssp_rcp_scenario")
@@ -214,34 +215,81 @@ def model_wrapper_local(**kwargs) -> tuple[float, float, float, float]:
     no_of_ensembles = model.no_of_ensembles
 
     # -- stepwise simulation -----------------------------------------------
-    data = model.evaluate()
+    ecr = np.zeros((n_regions, n_timesteps, no_of_ensembles))
+    constrained_ecr = np.zeros_like(ecr)
+    prev_temp = 0.0
+    diff = 0.0
 
-    gt = data["global_temperature"]
+    for t in range(n_timesteps):
+        constrained_ecr[:, t, :] = constraint.constrain_emission_control_rate(
+            ecr[:, t, :],
+            t,
+            allow_fallback=False,
+        )
+
+        model.stepwise_run(
+            emission_control_rate=constrained_ecr[:, t, :],
+            timestep=t,
+            endogenous_savings_rate=True,
+        )
+
+        data = model.stepwise_evaluate(timestep=t)
+        temp = data["global_temperature"][t, :]
+
+        if t % 5 == 0:
+            diff = temp - prev_temp
+            prev_temp = temp
+
+        scaled_temp = (temp - _MIN_TEMP) / (_MAX_TEMP - _MIN_TEMP)
+        scaled_diff = (diff - _MIN_DIFF) / (_MAX_DIFF - _MIN_DIFF)
+
+        if t < n_timesteps - 1:
+            ecr[:, t + 1, :] = rbf.apply_rbfs(
+                np.array([scaled_temp, scaled_diff])
+            )
+
+    # -- final objectives ---------------------------------------------------
+    data = model.evaluate()
 
     welfare = float(np.abs(data["welfare"]))
     welfare = welfare if np.isfinite(welfare) else 1e6
 
-    yrs_above = float(
-        years_above_temperature_threshold(gt, threshold=2.0)
+    frac = fraction_of_ensemble_above_threshold(
+        temperature=data["global_temperature"],
+        temperature_year_index=temp_year_idx,
+        threshold=2.0,
     )
-    yrs_above = yrs_above if np.isfinite(yrs_above) else 1e6
-
-    damage_pc = np.maximum(data["damage_cost_per_capita"], SMALL_NUMBER)
-    abatement_pc = np.maximum(data["abatement_cost_per_capita"], SMALL_NUMBER)
+    frac = float(frac) if np.isfinite(float(frac)) else 1.0
 
     _, _, _, wl_damage = model.welfare_function.calculate_welfare(
-        damage_pc, welfare_loss=True
+        data["damage_cost_per_capita"],
+        welfare_loss=True,
     )
-    wl_damage = float(np.abs(wl_damage)) if np.isfinite(wl_damage) else 1e6
+    wl_damage = float(np.abs(wl_damage))
+    wl_damage = wl_damage if np.isfinite(wl_damage) else 0.0
 
     _, _, _, wl_abatement = model.welfare_function.calculate_welfare(
-        abatement_pc, welfare_loss=True
+        data["abatement_cost_per_capita"],
+        welfare_loss=True,
     )
-    wl_abatement = float(np.abs(wl_abatement)) if np.isfinite(wl_abatement) else 1e6
+    wl_abatement = float(np.abs(wl_abatement))
+    wl_abatement = wl_abatement if np.isfinite(wl_abatement) else 0.0
 
-    return (welfare, yrs_above, wl_damage, wl_abatement)
+    # Global abatement burden:
+    # Abatement burden = abatement cost as share of gross economic output,
+    # averaged over all regions, timesteps, and ensemble members.
+    gross_output = data["gross_economic_output"]
+    abatement_cost = data["abatement_cost"]
 
+    abatement_burden_array = np.divide(
+        abatement_cost,
+        np.maximum(gross_output, SMALL_NUMBER),
+    )
 
+    A_Burden = float(np.nanmean(abatement_burden_array))
+    A_Burden = A_Burden if np.isfinite(A_Burden) else 1e6
+
+    return (welfare, frac, wl_damage, wl_abatement, A_Burden)
 # ===========================================================================
 # Single-seed optimisation
 # ===========================================================================
@@ -366,6 +414,7 @@ def run_seed(
         ScalarOutcome("fraction_above_threshold", kind=ScalarOutcome.MINIMIZE),
         ScalarOutcome("welfare_loss_damage",      kind=ScalarOutcome.MAXIMIZE),
         ScalarOutcome("welfare_loss_abatement",   kind=ScalarOutcome.MAXIMIZE),
+        ScalarOutcome("abatement_burden",         kind=ScalarOutcome.MINIMIZE),
     ]
 
     # -- output setup ------------------------------------------------------
