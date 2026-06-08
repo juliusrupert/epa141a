@@ -194,13 +194,13 @@ def model_wrapper_reeval(**kwargs) -> tuple:
         # ── Climate effectiveness metric ──────────────────────────────────────
         frac = fraction_of_ensemble_above_threshold(
             temperature=data["global_temperature"],
-            temperature_year_index=temp_year_idx,
+            temperature_year_index=TEMP_YEAR_IDX,
             threshold=2.0,
         )
         frac = float(frac) if np.isfinite(float(frac)) else 1.0
 
         yrs_above = float(
-            years_above_temperature_threshold(gt_safe, threshold=2.0)
+            years_above_temperature_threshold(data["global_temperature"], threshold=2.0)
         )
         yrs_above = yrs_above if np.isfinite(yrs_above) else 1e6
 
@@ -258,7 +258,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n_scenarios",
         type=int,
-        default=200,
+        default=1000,
         help="Number of FAIR ensemble members to use. Default: 1000 = full ensemble.",
     )
     parser.add_argument(
