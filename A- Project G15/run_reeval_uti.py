@@ -132,6 +132,7 @@ def model_wrapper_reeval(**kwargs) -> tuple:
             emission_control_start_timestep = EC_START_TS,
             min_emission_control_rate       = 0.01,
         )
+        JUSTICE.hard_reset()
 
         model = JUSTICE(
             scenario                     = SCENARIO,
@@ -337,7 +338,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n_scenarios",
         type=int,
-        default=1000,
+        default=200,
         help="Number of FAIR ensemble members to use. Default: 1000 = full ensemble.",
     )
     parser.add_argument(
