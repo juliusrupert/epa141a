@@ -200,7 +200,7 @@ def model_wrapper_reeval(**kwargs) -> tuple:
         frac = float(frac) if np.isfinite(float(frac)) else 1.0
 
         yrs_above = float(
-            years_above_temperature_threshold(gt_safe, threshold=2.0)
+            years_above_temperature_threshold(data["global_temperature"], threshold=2.0)
         )
         yrs_above = yrs_above if np.isfinite(yrs_above) else 1e6
 
