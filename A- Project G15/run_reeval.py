@@ -101,6 +101,8 @@ _MAX_DIFF, _MIN_DIFF = 2.0, 0.0
 OBJECTIVES = [
     "welfare",
     "fraction_above_threshold",
+    "global_temperature_2100",
+    "max_global_temperature",
     "welfare_loss_damage",
     "welfare_loss_abatement",
     "abatement_burden",
@@ -194,8 +196,28 @@ def model_wrapper_reeval(**kwargs) -> tuple:
                 )
 
         data = model.evaluate()
+        # ── Literal temperature metrics ─────────────────────────────
 
-        # ── Climate effectiveness metric ──────────────────────────────────────
+        global_temperature = data["global_temperature"]
+
+        global_temperature_2100 = float(
+            np.nanmean(global_temperature[TEMP_YEAR_IDX, :])
+        )
+        global_temperature_2100 = (
+            global_temperature_2100
+            if np.isfinite(global_temperature_2100)
+            else 1e6
+        )
+
+        max_global_temperature = float(
+            np.nanmax(global_temperature)
+        )
+        max_global_temperature = (
+            max_global_temperature
+            if np.isfinite(max_global_temperature)
+            else 1e6
+        )
+                # ── Climate effectiveness metric ──────────────────────────────────────
         frac = fraction_of_ensemble_above_threshold(
             temperature=data["global_temperature"],
             temperature_year_index=TEMP_YEAR_IDX,
@@ -294,6 +316,8 @@ def model_wrapper_reeval(**kwargs) -> tuple:
         return (
             welfare,
             frac,
+            global_temperature_2100,
+            max_global_temperature,
             wl_damage,
             wl_abatement,
             A_Burden,
@@ -301,10 +325,9 @@ def model_wrapper_reeval(**kwargs) -> tuple:
             zaf_mean_damage_fraction,
             zaf_mean_net_output_ratio,
         )
-
     except Exception as e:
         print(f"[FAILED RUN] {type(e).__name__}: {e}")
-        return (1e6, 1e6, 1e6, 1e6, 1e6, 1e6, 1e6, -1e6)
+        return (1e6, 1e6, 1e6, 1e6, 1e6, 1e6, 1e6, 1e6, 1e6, -1e6)
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
@@ -356,6 +379,8 @@ if __name__ == "__main__":
     OPT_OBJECTIVES = [
         "welfare",
         "fraction_above_threshold",
+        "global_temperature_2100",
+        "max_global_temperature",
         "welfare_loss_damage",
         "welfare_loss_abatement",
         "abatement_burden",
@@ -422,6 +447,8 @@ if __name__ == "__main__":
     ema_model.outcomes = [
         ScalarOutcome("welfare", kind=ScalarOutcome.MINIMIZE),
         ScalarOutcome("fraction_above_threshold", kind=ScalarOutcome.MINIMIZE),
+        ScalarOutcome("global_temperature_2100", kind=ScalarOutcome.MINIMIZE),
+        ScalarOutcome("max_global_temperature", kind=ScalarOutcome.MINIMIZE),
         ScalarOutcome("welfare_loss_damage", kind=ScalarOutcome.MINIMIZE),
         ScalarOutcome("welfare_loss_abatement", kind=ScalarOutcome.MINIMIZE),
         ScalarOutcome("abatement_burden", kind=ScalarOutcome.MINIMIZE),
