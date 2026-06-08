@@ -101,11 +101,15 @@ _MAX_DIFF, _MIN_DIFF = 2.0, 0.0
 OBJECTIVES = [
     "welfare",
     "fraction_above_threshold",
+    "global_temperature_2100",
+    "max_global_temperature",
     "welfare_loss_damage",
     "welfare_loss_abatement",
     "abatement_burden",
+    "zaf_mean_abatement_burden",
+    "zaf_mean_damage_fraction",
+    "zaf_mean_net_output_ratio",
 ]
-
 # ── Model wrapper ────────────────────────────────────────────────────────────
 def model_wrapper_reeval(**kwargs) -> tuple:
     try:
@@ -190,7 +194,27 @@ def model_wrapper_reeval(**kwargs) -> tuple:
                 )
 
         data = model.evaluate()
+        # ── Literal temperature metrics ─────────────────────────────
 
+        global_temperature = data["global_temperature"]
+
+        global_temperature_2100 = float(
+            np.nanmean(global_temperature[TEMP_YEAR_IDX, :])
+        )
+        global_temperature_2100 = (
+            global_temperature_2100
+            if np.isfinite(global_temperature_2100)
+            else 1e6
+        )
+
+        max_global_temperature = float(
+            np.nanmax(global_temperature)
+        )
+        max_global_temperature = (
+            max_global_temperature
+            if np.isfinite(max_global_temperature)
+            else 1e6
+        )
         # ── Climate effectiveness metric ──────────────────────────────────────
         frac = fraction_of_ensemble_above_threshold(
             temperature=data["global_temperature"],
@@ -222,12 +246,16 @@ def model_wrapper_reeval(**kwargs) -> tuple:
             welfare_loss=True,
         )
         wl_abatement = float(np.abs(wl_abatement)) if np.isfinite(wl_abatement) else 1e6
-        # ── Global abatement burden ───────────────────────────────────────────────
-        # Abatement burden = abatement cost as share of gross economic output,
-        # averaged over all regions, timesteps, and ensemble members.
-        gross_output = data["gross_economic_output"]
-        abatement_cost = data["abatement_cost"]
+        # ── Global and South Africa-specific burden / damage metrics ─────────────
 
+        gross_output = data["gross_economic_output"]
+        net_output = data["net_economic_output"]
+        abatement_cost = data["abatement_cost"]
+        damage_fraction = data["damage_fraction"]
+
+        # Global abatement burden:
+        # abatement cost as share of gross economic output,
+        # averaged over all regions, timesteps, and ensemble members.
         abatement_burden_arr = np.divide(
             abatement_cost,
             np.maximum(gross_output, SMALL_NUMBER),
@@ -236,18 +264,69 @@ def model_wrapper_reeval(**kwargs) -> tuple:
         A_Burden = float(np.nanmean(abatement_burden_arr))
         A_Burden = A_Burden if np.isfinite(A_Burden) else 1e6
 
+        # South Africa index
+        region_list = list(model.region_list)
+        zaf_idx = region_list.index("zaf")
+
+        # South Africa-specific arrays
+        zaf_gross_output = gross_output[zaf_idx, :, :]
+        zaf_net_output = net_output[zaf_idx, :, :]
+        zaf_abatement_cost = abatement_cost[zaf_idx, :, :]
+        zaf_damage_fraction_arr = damage_fraction[zaf_idx, :, :]
+
+        # 1. SA abatement burden = abatement cost / gross output
+        zaf_mean_abatement_burden = float(
+            np.nanmean(
+                np.divide(
+                    zaf_abatement_cost,
+                    np.maximum(zaf_gross_output, SMALL_NUMBER),
+                )
+            )
+        )
+        zaf_mean_abatement_burden = (
+            zaf_mean_abatement_burden
+            if np.isfinite(zaf_mean_abatement_burden)
+            else 1e6
+        )
+
+        # 2. SA damage fraction
+        zaf_mean_damage_fraction = float(np.nanmean(zaf_damage_fraction_arr))
+        zaf_mean_damage_fraction = (
+            zaf_mean_damage_fraction
+            if np.isfinite(zaf_mean_damage_fraction)
+            else 1e6
+        )
+
+        # 3. SA net output ratio = net economic output / gross economic output
+        zaf_mean_net_output_ratio = float(
+            np.nanmean(
+                np.divide(
+                    zaf_net_output,
+                    np.maximum(zaf_gross_output, SMALL_NUMBER),
+                )
+            )
+        )
+        zaf_mean_net_output_ratio = (
+            zaf_mean_net_output_ratio
+            if np.isfinite(zaf_mean_net_output_ratio)
+            else -1e6
+        )
 
         return (
             welfare,
             frac,
+            global_temperature_2100,
+            max_global_temperature,
             wl_damage,
             wl_abatement,
             A_Burden,
+            zaf_mean_abatement_burden,
+            zaf_mean_damage_fraction,
+            zaf_mean_net_output_ratio,
         )
-
     except Exception as e:
         print(f"[FAILED RUN] {type(e).__name__}: {e}")
-        return (1e6, 1e6, 1e6, 1e6, 1e6, 1e6, 1e6)
+        return (1e6, 1e6, 1e6, 1e6, 1e6, 1e6, 1e6, 1e6, 1e6, -1e6)
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -300,11 +379,15 @@ if __name__ == "__main__":
     OPT_OBJECTIVES = [
         "welfare",
         "fraction_above_threshold",
+        "global_temperature_2100",
+        "max_global_temperature",
         "welfare_loss_damage",
         "welfare_loss_abatement",
-        "abatement_burden"
+        "abatement_burden",
+        "zaf_mean_abatement_burden",
+        "zaf_mean_damage_fraction",
+        "zaf_mean_net_output_ratio",
     ]
-
     LEVER_COLS = [c for c in ref_set.columns if c not in OPT_OBJECTIVES]
 
     N_POLICIES   = len(ref_set)
@@ -363,9 +446,14 @@ if __name__ == "__main__":
     ema_model.outcomes = [
         ScalarOutcome("welfare", kind=ScalarOutcome.MINIMIZE),
         ScalarOutcome("fraction_above_threshold", kind=ScalarOutcome.MINIMIZE),
-        ScalarOutcome("welfare_loss_damage", kind=ScalarOutcome.MAXIMIZE),
-        ScalarOutcome("welfare_loss_abatement", kind=ScalarOutcome.MAXIMIZE),
+        ScalarOutcome("global_temperature_2100", kind=ScalarOutcome.MINIMIZE),
+        ScalarOutcome("max_global_temperature", kind=ScalarOutcome.MINIMIZE),
+        ScalarOutcome("welfare_loss_damage", kind=ScalarOutcome.MINIMIZE),
+        ScalarOutcome("welfare_loss_abatement", kind=ScalarOutcome.MINIMIZE),
         ScalarOutcome("abatement_burden", kind=ScalarOutcome.MINIMIZE),
+        ScalarOutcome("zaf_mean_abatement_burden", kind=ScalarOutcome.MINIMIZE),
+        ScalarOutcome("zaf_mean_damage_fraction", kind=ScalarOutcome.MINIMIZE),
+        ScalarOutcome("zaf_mean_net_output_ratio", kind=ScalarOutcome.MAXIMIZE),
     ]
 
     policies = [
