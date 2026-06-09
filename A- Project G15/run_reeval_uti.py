@@ -338,7 +338,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n_scenarios",
         type=int,
-        default=200,
+        default=1000,
         help="Number of FAIR ensemble members to use. Default: 1000 = full ensemble.",
     )
     parser.add_argument(
