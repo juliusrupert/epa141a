@@ -72,7 +72,8 @@ GSA_OBJECTIVES = [
     "zaf_mean_net_output_ratio",
 ]
 
-GSA_PARAMS = ["rho", "eta", "delta", "ecs_ensemble"]
+GSA_PARAMS = ["rho", "eta", "delta"]
+FIXED_ECS_ENSEMBLE = 501
 
 POLICY_ECR = {
     "no_abatement": 0.0,
@@ -179,7 +180,7 @@ def justice_gsa_model(
     rho=0.015,
     eta=1.45,
     delta=1.0,
-    ecs_ensemble=501,
+    ecs_ensemble=FIXED_ECS_ENSEMBLE,
     ecr_plateau=0.0,
     gsa_scenario=2,
     gsa_temp_year_idx=85,
@@ -191,6 +192,8 @@ def justice_gsa_model(
     - rho
     - eta
     - delta
+
+    Fixed:
     - ecs_ensemble
 
     Fixed policy lever:
@@ -364,7 +367,6 @@ def build_gsa_model():
         RealParameter("rho", 0.001, 0.030),
         RealParameter("eta", 0.5, 1.5),
         RealParameter("delta", 0.5, 2.0),
-        RealParameter("ecs_ensemble", 1, 1000),
     ]
 
     # Define ecr_plateau as lever and fix it with policy Samples.
@@ -607,10 +609,10 @@ def run_experiments(gsa_model, policies, n_sobol, n_cores, sequential, out_dir: 
     # nearly all cases.
     if "welfare" in outcomes_df.columns:
         failed_fraction = float((outcomes_df["welfare"] >= 1e6).mean())
-        print(f"Fallback/failure fraction: {failed_fraction:.3f}")
-        if failed_fraction > 0.50:
+        print(f"Fallback/failure fraction: {failed_fraction:.6f}")
+        if failed_fraction > 0.0:
             raise RuntimeError(
-                "More than 50% of Sobol runs returned fallback values. "
+                "At least one Sobol run returned fallback values. "
                 "Do not use these results. Check the model wrapper and paths."
             )
 
@@ -647,7 +649,7 @@ def main():
     output_root.mkdir(parents=True, exist_ok=True)
 
     policy_tag = "_".join(args.policies)
-    run_dir = output_root / f"N{args.n_sobol}_{policy_tag}"
+    run_dir = output_root / f"N{args.n_sobol}_fixedECS{FIXED_ECS_ENSEMBLE}_{policy_tag}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 72)
