@@ -1,0 +1,37 @@
+{
+    "start_year": 2015,
+    "end_year": 2300,
+    "data_timestep": 5,
+    "timestep": 1,
+    "emission_control_start_year": 2025,
+    "n_rbfs": 4,
+    "n_inputs": 2,
+    "epsilons": [
+        1.0,
+        0.01,
+        10.0,
+        10.0,
+        0.001
+    ],
+    "temperature_year_of_interest": 2100,
+    "reference_ssp_rcp_scenario_index": 2,
+    "stochastic_run": false,
+    "climate_ensemble_members": [
+        85,
+        88,
+        93,
+        200,
+        429,
+        434,
+        524,
+        647,
+        693,
+        718,
+        735,
+        761,
+        764,
+        851,
+        973
+    ],
+    "social_welfare_function_type": 1
+}
