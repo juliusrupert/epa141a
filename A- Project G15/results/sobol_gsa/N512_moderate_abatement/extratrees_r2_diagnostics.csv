@@ -1,0 +1,11 @@
+policy,outcome,r2_mean,r2_std,note
+moderate_abatement,welfare,0.38138256559956674,0.47320042719950717,
+moderate_abatement,years_above_temperature_threshold,0.5154309083545894,0.032259888787235874,
+moderate_abatement,fraction_above_threshold,0.48690713381521283,0.0487011121114061,
+moderate_abatement,global_temperature_2100,0.5023408606018522,0.048881502477321016,
+moderate_abatement,max_global_temperature,0.46209403732177795,0.054158395728587376,
+moderate_abatement,welfare_loss_damage,0.5693159393672452,0.2703299944421032,
+moderate_abatement,welfare_loss_abatement,0.475352986249307,0.23313713642222803,
+moderate_abatement,zaf_mean_abatement_burden,0.6606486481302426,0.02904076559709488,
+moderate_abatement,zaf_mean_damage_fraction,0.6284226454191425,0.0274005370336978,
+moderate_abatement,zaf_mean_net_output_ratio,0.6309005939987636,0.027251131109558232,
