@@ -1,0 +1,32 @@
+\begin{longtable}{p{3.2cm} p{4.0cm} p{6.0cm} p{6.0cm}}
+\caption{XLRM framing for South Africa's just transition mandate} \label{tab:xlrm_south_africa} \\
+\toprule
+XLRM & Element & Meaning for South Africa & Model operationalisation \\
+\midrule
+\endfirsthead
+\caption[]{XLRM framing for South Africa's just transition mandate} \\
+\toprule
+XLRM & Element & Meaning for South Africa & Model operationalisation \\
+\midrule
+\endhead
+\midrule
+\multicolumn{4}{r}{Continued on next page} \\
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+X — Exogenous uncertainties & Future socioeconomic pathway & Future development affects emissions, economic output, climate damages, and South Africa's ability to carry transition costs. & Reference scenario SSP2-RCP4.5; broader scenario uncertainty is discussed as part of the political interpretation. \\
+X — Exogenous uncertainties & Climate response uncertainty & The same mitigation policy can lead to different temperature outcomes depending on the climate response. & Subset of FaIR climate ensemble members used in the final runs. \\
+X — Exogenous uncertainties & Regional climate damages & Insufficient mitigation can impose economic damages on South Africa, which must be weighed against the cost of abatement. & Damage outcomes for zaf, including damage fraction and economic damage relative to gross economic output. \\
+X — Exogenous uncertainties & Normative welfare framing & The evaluation of a policy depends on whether worse-off regions receive additional weight or whether only aggregate global welfare is prioritised. & Prioritarian welfare as the main framing; Utilitarian welfare as the rival framing. \\
+X — Exogenous uncertainties & Availability and form of Just Transition finance & Finance determines whether ambitious mitigation is politically and economically feasible for a coal-dependent emerging economy. & Not modelled directly; used to interpret whether South Africa's abatement burden is politically acceptable. \\
+L — Policy levers & Regional emission control rate & Determines how quickly each region reduces emissions and therefore how much mitigation burden South Africa faces. & Emission control rate μ for each region over time. \\
+L — Policy levers & Adaptive mitigation policy & Allows mitigation levels to respond over time instead of imposing one fixed pathway in advance. & RBF policy defined by centers, radii, and weights. \\
+R — Model relationships & Climate-economy system & Mitigation reduces climate risk but also creates abatement costs; both affect South Africa's economic outcomes. & JUSTICE links gross economic output, emissions, temperature, damages, abatement costs, consumption, and welfare. \\
+R — Model relationships & Burden mechanism & The same mitigation effort can create unequal burdens because countries differ in economic capacity and energy-system dependence. & South Africa's burden is evaluated as abatement\_cost divided by gross\_economic\_output for zaf. \\
+M — Performance measures & Global climate risk & Measures whether the policy contributes to avoiding dangerous global warming. & fraction\_above\_threshold and global temperature in 2100. \\
+M — Performance measures & Global welfare & Measures the overall welfare performance of a mitigation policy under the chosen welfare framing. & welfare, evaluated mainly under the Prioritarian welfare function. \\
+M — Performance measures & South Africa abatement burden & Measures whether mitigation costs are disproportionate relative to South Africa's economic capacity. & abatement\_cost / gross\_economic\_output for zaf. \\
+M — Performance measures & South Africa damage burden & Measures the economic cost of insufficient mitigation for South Africa. & economic\_damage / gross\_economic\_output and damage\_fraction for zaf. \\
+M — Performance measures & South Africa net output protection & Measures whether climate policy leaves South Africa with sufficient economic output after damages and abatement costs. & net\_economic\_output / gross\_economic\_output for zaf. \\
+\end{longtable}
