@@ -35,7 +35,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 # ── Paths ────────────────────────────────────────────────────────────────────
 _SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 _JUSTICE_ROOT = os.path.normpath(os.path.join(_SCRIPT_DIR, "../JUSTICE-main"))
-_CONFIG_DIR   = os.path.normpath(os.path.join(_SCRIPT_DIR, "config"))
+_CONFIG_DIR   = os.path.normpath(os.path.join(_SCRIPT_DIR, "../config"))
 RESULTS_ROOT  = os.path.join(_SCRIPT_DIR, "results_rival")
 
 SMALL_NUMBER = 1e-9
